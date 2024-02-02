@@ -12,22 +12,28 @@ const int CEILING = 1024;
 
 const int LOCATION_NOT_READ = -255;
 const int READ_COMPLETED = 0;
-const int WRITE_COMPLETED = 11111;
+const int WRITE_COMPLETED = 522;
 const int EMPTY_ADDRESS = -1;
+const int ADDRESS_SET = 800;
+const int ADDRESS_UNSET = -800;
 
 const int COLUMNS = 2;
 const int BUFFER_SIZE = 16;
 
 
 const char* printCode (int code) {
-    if (code == EMPTY_ADDRESS)
-        return "EMPTY_ADDRESS";
-    else if (code == WRITE_COMPLETED)
-        return "WRITE_COMPLETED";
+    if (code == LOCATION_NOT_READ)
+        return "LOCATION NOT READ";
     else if (code == READ_COMPLETED)
         return "READ_COMPLETED";
-    else if (code == LOCATION_NOT_READ)
-        return "LOCATION NOT READ";
+    else if (code == WRITE_COMPLETED)
+        return "WRITE_COMPLETED";
+    else if (code == EMPTY_ADDRESS)
+        return "EMPTY_ADDRESS";
+    else if (code == ADDRESS_SET)
+        return "ADDRESS_SET";
+    else if (code == ADDRESS_UNSET)
+        return "ADDRESS_UNSET";
     else
         return "INVALID CODE";
 }
@@ -37,6 +43,8 @@ int randomInt (int floor, int ceiling) {
 }
 
 void writer (int storage[], int writerLog[], size_t storageSize, int *flagPointer) {
+    int tries = 0;
+    int maxTries = BUFFER_SIZE / 3;
     printf("\n\tentered writer with state %s\n", printCode(*flagPointer));
     if (*flagPointer != READ_COMPLETED) {
         printf("flag location %p not set to READ_COMPLETED. No WRITES can be made\n", flagPointer, printCode(*flagPointer));
@@ -46,46 +54,75 @@ void writer (int storage[], int writerLog[], size_t storageSize, int *flagPointe
 //    printf("flag location:%p\n", flagPointer);
     int location = rand() % storageSize;
     int number = randomInt(FLOOR, CEILING);
-
-    for (index = 0; index < storageSize; ++index) {
-        if (writerLog[index] == EMPTY_ADDRESS) {
-            storage[location] = number;
-            writerLog[index] = location;
-            *flagPointer = WRITE_COMPLETED;
-            printf("wrote %d to location -> %d\n", storage[location],  location);
-            return;
-        }
+    while (writerLog[location] != ADDRESS_UNSET && tries < maxTries) {
+        ++tries;
+        location = rand() % storageSize;
     }
-    printf("Could not find an empty slot for recording the transaction\n");
+    if (tries == maxTries) {
+        printf("no locations can be overwritten. Try later.");
+        return;
+    }
+    else {
+        storage[location] = number;
+        writerLog[location] = ADDRESS_SET;
+        *flagPointer = WRITE_COMPLETED;
+        printf("wrote %d to location -> %d\n", storage[location],  location);
+    }
+//
+//
+//    for (index = 0; index < storageSize; ++index) {
+//        if (writerLog[index] == EMPTY_ADDRESS) {
+//            storage[location] = number;
+//            writerLog[index] = location;
+//            *flagPointer = WRITE_COMPLETED;
+//            printf("wrote %d to location -> %d\n", storage[location],  location);
+//            return;
+//        }
+//    }
+//    printf("Could not find an empty slot for recording the transaction\n");
 }
 
 
-void reader (int storage[], int writerLog[], int readerLog[][COLUMNS ], size_t storageSize, int *flagPointer) {
+void reader (int storage[], int writerLog[], int readerLog[][COLUMNS ], size_t storageSize, int *flagPointer, int address) {
     printf("\n\tentered reader with state %s\n", printCode(*flagPointer));
     if (*flagPointer != WRITE_COMPLETED ) {
         printf("flag location %p not set to WRITE_COMPLETED. No READS can be made\n", flagPointer, printCode(*flagPointer));
         return;
     }
-    for (int i = 0; i < storageSize; ++i) {
-        if (writerLog[i] >= 0) {
-            int memoryAddress = writerLog[i];
-
-            readerLog[memoryAddress][1] = storage[memoryAddress];
-            writerLog[i] = EMPTY_ADDRESS;
-            printf("Read %d at address %d\n", readerLog[memoryAddress][1], memoryAddress);
+    if (writerLog[address] != ADDRESS_SET) {
+        if (readerLog[address][1] == storage[address]) {
+            printf("No new data at address %d\n", address);
         }
+        else {
+            printf("missed write at address %d\n", address);
+        }
+        return;
     }
-    printf("Nothing new has been written.");
-    *flagPointer = READ_COMPLETED;
+    else {
+       readerLog[address][1] = storage[address];
+       writerLog[address] = ADDRESS_UNSET;
+       *flagPointer = READ_COMPLETED;
+    }
+//    for (int i = 0; i < storageSize; ++i) {
+//        if (writerLog[i] >= 0) {
+//            int memoryAddress = writerLog[i];
+//
+//            readerLog[memoryAddress][1] = storage[memoryAddress];
+//            writerLog[i] = EMPTY_ADDRESS;
+//            printf("Read %d at address %d\n", readerLog[memoryAddress][1], memoryAddress);
+//        }
+//    }
+//    printf("Nothing new has been written.");
+//    *flagPointer = READ_COMPLETED;
 }
 
 void flushWriterLog (int writerLog[], size_t size) {
     for (int i = 0; i < BUFFER_SIZE; ++i) {
-        writerLog[i] = EMPTY_ADDRESS;
+        writerLog[i] = ADDRESS_UNSET;
     }
 
     for (int i = 0; i < BUFFER_SIZE; ++i) {
-        if (writerLog[i] != EMPTY_ADDRESS) {
+        if (writerLog[i] != ADDRESS_UNSET) {
             printf("writeLog flush failed\n");
             exit(EXIT_FAILURE);
         }
@@ -108,13 +145,22 @@ void flushReaderLog (int readerLog[][COLUMNS], size_t size) {
 }
 
 void printWriteTransactions (int storage[], int writeLog[], int readLog[][COLUMNS], size_t size) {
-    int writeLocation = EMPTY_ADDRESS;
     for (int i = 0; i < size; ++i) {
-        if (writeLog[i] > -1) {
-            writeLocation = writeLog[i];
-            printf("store[%d]=%d\t", writeLocation, storage[writeLocation]);
-            printf("\twriteLog[%d]:%d", i, writeLog[i]);
-            printf("\treadLog[%d][1]->%d\n", writeLocation, readLog[writeLocation][1]);
+        if (writeLog[i] == ADDRESS_SET) {
+            printf("store[%d]=%d\t", i, storage[i]);
+            printf("\twriteLog[%d]:%s", i, printCode(writeLog[i]));
+            printf("\treadLog[%d][1]->%d\n", i, readLog[i][1]);
+        }
+    }
+}
+
+void printReadTransactions (int storage[], int writeLog[], int readLog[][COLUMNS], size_t size) {
+    int readLocation = EMPTY_ADDRESS;
+    for (int i = 0; i < size; ++i) {
+        if (writeLog[i] != ADDRESS_UNSET) {
+            printf("store[%d]=%d\t", i, storage[i]);
+            printf("\twriteLog[%d]:%d", i, printCode(writeLog[i]));
+            printf("\treadLog[%d][1]->%d\n", readLocation, readLog[readLocation][1]);
         }
     }
 }
@@ -129,7 +175,7 @@ void printStorageContent (int storage[], int writeLog[], int readLog[][COLUMNS],
             if (writeLog[i] == EMPTY_ADDRESS ) {
                 printf("%s\twriteLog[%d]->", printCode(EMPTY_ADDRESS), i);
             } else {
-                printf("%d\twriteLog[%d]->", writeLog[i], i);
+                printf("%d\twriteLog[%d]->", printCode(writeLog[i]), i);
             }
             if (readLog[i][0] == LOCATION_NOT_READ) {
                 printf("%s\n", printCode(readLog[i][0]));
@@ -156,7 +202,8 @@ void readingManager (size_t jobCount, int storage[], int writerLog[], int reader
         exit(EXIT_FAILURE);
     }
     for (int i = 0; i < jobCount; ++i) {
-        reader(storage, writerLog, readerLog, storageSize, flag);
+        int address = rand() % storageSize;
+        reader(storage, writerLog, readerLog, storageSize, flag, address);
     }
 }
 
@@ -186,8 +233,8 @@ int main () {
     printf("FLAG=%s\n", printCode(*flagPointer), writeCount);
     printf("writeCount:%d\n", writeCount);
     writingManager(writeCount, storage, writerLog, BUFFER_SIZE, &flag);
-    printf("\nREPORT OF %d WRITE OPERATIONS\n");
-    printf("----------------------------- \n", writeCount);
+    printf("\nREPORT OF %d WRITE OPERATIONS\n", writeCount);
+    printf("----------------------------- \n");
 
     printf("\nFINAL STORAGE STATE\n");
     printf("--------------------------\n");
@@ -196,8 +243,9 @@ int main () {
     int readCount = rand() % (BUFFER_SIZE) + 1;
     printf("readCount:%d\n", readCount);
 //    reader(storage, writerLog, readerLog, BUFFER_SIZE, &flag);
-    readingManager(writeCount, storage, writerLog, readerLog, BUFFER_SIZE, &flag);
-    printf("\nREPORT OF %d WRITE OPERATIONS\n");
-    printf("----------------------------- \n", writeCount);
+    readingManager(readCount, storage, writerLog, readerLog, BUFFER_SIZE, &flag);
+    printf("\nREPORT OF %d READ OPERATIONS\n", readCount);
+    printf("----------------------------- \n");
+    printReadTransactions(storage, writerLog, readerLog, BUFFER_SIZE);
     return 0;
 }
