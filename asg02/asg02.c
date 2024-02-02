@@ -110,7 +110,6 @@ void flushReaderLog (int readerLog[][COLUMNS], size_t size) {
 void printWriteTransactions (int storage[], int writeLog[], int readLog[][COLUMNS], size_t size) {
     int writeLocation = EMPTY_ADDRESS;
     for (int i = 0; i < size; ++i) {
-
         if (writeLog[i] > -1) {
             writeLocation = writeLog[i];
             printf("store[%d]=%d\t", writeLocation, storage[writeLocation]);
@@ -140,13 +139,24 @@ void printStorageContent (int storage[], int writeLog[], int readLog[][COLUMNS],
         }
     }
 }
+
 void writingManager (size_t jobCount, int storage[], int writerLog[], size_t storageSize, int *flag) {
     if (jobCount > storageSize) {
-        printf("The number of is larger than the storage space.  This would overwrite data\n");
+        printf("The number of write jobs is larger than the storage space. This would overwrite data\n");
         exit(EXIT_FAILURE);
     }
     for (int i = 0; i < jobCount; ++i) {
         writer(storage, writerLog, storageSize, flag);
+    }
+}
+
+void readingManager (size_t jobCount, int storage[], int writerLog[], int readerLog[][COLUMNS], size_t storageSize, int *flag) {
+    if (jobCount > storageSize) {
+        printf("The number of read jobs is larger than the storage space. This would overwrite data\n");
+        exit(EXIT_FAILURE);
+    }
+    for (int i = 0; i < jobCount; ++i) {
+        reader(storage, writerLog, readerLog, storageSize, flag);
     }
 }
 
@@ -170,10 +180,11 @@ int main () {
     printStorageContent(storage, writerLog, readerLog, BUFFER_SIZE, false);
 
     int writeCount = rand() % (BUFFER_SIZE) + 1;
-    printf("\nIINITIAL FLAG STATE\n");
+    printf("\nINITIAL FLAG STATE\n");
     printf("--------------------------\n");
-    printf("FLAG_ADDRESS:%p\nFLAG=%s\nwriteCount:%d\n", flagPointer, printCode(*flagPointer), writeCount);
-
+    printf("FLAG_ADDRESS:%p\n", flagPointer);
+    printf("FLAG=%s\n", printCode(*flagPointer), writeCount);
+    printf("writeCount:%d\n", writeCount);
     writingManager(writeCount, storage, writerLog, BUFFER_SIZE, &flag);
     printf("\nREPORT OF %d WRITE OPERATIONS\n");
     printf("----------------------------- \n", writeCount);
@@ -182,8 +193,10 @@ int main () {
     printf("--------------------------\n");
     printStorageContent(storage, writerLog, readerLog, BUFFER_SIZE, true);
 
-    reader(storage, writerLog, readerLog, BUFFER_SIZE, &flag);
-    writingManager(writeCount, storage, writerLog, BUFFER_SIZE, &flag);
+    int readCount = rand() % (BUFFER_SIZE) + 1;
+    printf("readCount:%d\n", readCount);
+//    reader(storage, writerLog, readerLog, BUFFER_SIZE, &flag);
+    readingManager(writeCount, storage, writerLog, readerLog, BUFFER_SIZE, &flag);
     printf("\nREPORT OF %d WRITE OPERATIONS\n");
     printf("----------------------------- \n", writeCount);
     return 0;
