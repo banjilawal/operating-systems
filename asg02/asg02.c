@@ -69,9 +69,10 @@ void reader (int storage[], int writerLog[], int readerLog[][COLUMNS ], size_t s
     for (int i = 0; i < storageSize; ++i) {
         if (writerLog[i] >= 0) {
             int memoryAddress = writerLog[i];
+
             readerLog[memoryAddress][1] = storage[memoryAddress];
             writerLog[i] = EMPTY_ADDRESS;
-            printf("Read %d at address %d\n", readerLog[memoryAddress], memoryAddress);
+            printf("Read %d at address %d\n", readerLog[memoryAddress][1], memoryAddress);
         }
     }
     printf("Nothing new has been written.");
@@ -110,11 +111,11 @@ void printWriteTransactions (int storage[], int writeLog[], int readLog[][COLUMN
     int writeLocation = EMPTY_ADDRESS;
     for (int i = 0; i < size; ++i) {
 
-        if (writeLog[i] != EMPTY_ADDRESS ) {
+        if (writeLog[i] > -1) {
             writeLocation = writeLog[i];
             printf("store[%d]=%d\t", writeLocation, storage[writeLocation]);
             printf("\twriteLog[%d]:%d", i, writeLog[i]);
-            printf("\treadLog[%d]->%d\n", writeLocation, readLog[writeLocation]);
+            printf("\treadLog[%d][1]->%d\n", writeLocation, readLog[writeLocation][1]);
         }
     }
 }
